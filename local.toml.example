@@ -1,0 +1,14 @@
+# Example configuration for local development
+# Copy this file to local.toml and fill in your actual values
+
+[variables]
+# Client authentication key (for iOS Shortcuts or other clients to authenticate to this proxy)
+client_key = "your-client-bearer-token-here"
+
+# PocketSmith API key (get from https://my.pocketsmith.com/settings/api)
+pocketsmith_api_key = "your-pocketsmith-api-key-here"
+
+# PocketSmith account IDs for different currencies
+# You can find your account IDs from the PocketSmith API or web interface
+usd_account_id = "123456"
+ars_account_id = "789012"
