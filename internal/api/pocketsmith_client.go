@@ -13,8 +13,14 @@ import (
 
 // PocketSmithClient defines the interface for interacting with PocketSmith API
 type PocketSmithClient interface {
+	// GetMe gets the authenticated user's information
+	GetMe() (*domain.User, error)
+	// GetTransactionAccounts gets all transaction accounts for a user
+	GetTransactionAccounts(userID int) ([]domain.TransactionAccount, error)
+	// GetCategories gets all categories for a user
+	GetCategories(userID int) ([]domain.Category, error)
 	// CreateTransaction creates a new transaction in the specified account
-	CreateTransaction(accountID string, transaction *domain.PocketSmithTransaction) error
+	CreateTransaction(accountID int, transaction *domain.PocketSmithTransaction) error
 }
 
 // HTTPPocketSmithClient implements PocketSmithClient using HTTP
@@ -31,8 +37,128 @@ func NewHTTPPocketSmithClient(apiKey string) PocketSmithClient {
 	}
 }
 
+// GetMe implements PocketSmithClient.GetMe
+func (c *HTTPPocketSmithClient) GetMe() (*domain.User, error) {
+	// Create HTTP request
+	url := fmt.Sprintf("%s/me", c.baseURL)
+	httpReq, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	// Set headers
+	httpReq.Header.Set("accept", "application/json")
+	httpReq.Header.Set("X-Developer-Key", c.apiKey)
+
+	// Send request to PocketSmith API
+	resp, err := spinhttp.Send(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("send request to PocketSmith: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response from PocketSmith: %w", err)
+	}
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("PocketSmith request failed with status %d: %s", resp.StatusCode, string(responseBody))
+	}
+
+	// Unmarshal response
+	var user domain.User
+	if err := json.Unmarshal(responseBody, &user); err != nil {
+		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	return &user, nil
+}
+
+// GetTransactionAccounts implements PocketSmithClient.GetTransactionAccounts
+func (c *HTTPPocketSmithClient) GetTransactionAccounts(userID int) ([]domain.TransactionAccount, error) {
+	// Create HTTP request
+	url := fmt.Sprintf("%s/users/%d/transaction_accounts", c.baseURL, userID)
+	httpReq, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	// Set headers
+	httpReq.Header.Set("accept", "application/json")
+	httpReq.Header.Set("X-Developer-Key", c.apiKey)
+
+	// Send request to PocketSmith API
+	resp, err := spinhttp.Send(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("send request to PocketSmith: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response from PocketSmith: %w", err)
+	}
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("PocketSmith request failed with status %d: %s", resp.StatusCode, string(responseBody))
+	}
+
+	// Unmarshal response
+	var accounts []domain.TransactionAccount
+	if err := json.Unmarshal(responseBody, &accounts); err != nil {
+		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	return accounts, nil
+}
+
+// GetCategories implements PocketSmithClient.GetCategories
+func (c *HTTPPocketSmithClient) GetCategories(userID int) ([]domain.Category, error) {
+	// Create HTTP request
+	url := fmt.Sprintf("%s/users/%d/categories", c.baseURL, userID)
+	httpReq, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	// Set headers
+	httpReq.Header.Set("accept", "application/json")
+	httpReq.Header.Set("X-Developer-Key", c.apiKey)
+
+	// Send request to PocketSmith API
+	resp, err := spinhttp.Send(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("send request to PocketSmith: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response from PocketSmith: %w", err)
+	}
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("PocketSmith request failed with status %d: %s", resp.StatusCode, string(responseBody))
+	}
+
+	// Unmarshal response
+	var categories []domain.Category
+	if err := json.Unmarshal(responseBody, &categories); err != nil {
+		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	return categories, nil
+}
+
 // CreateTransaction implements PocketSmithClient.CreateTransaction
-func (c *HTTPPocketSmithClient) CreateTransaction(accountID string, transaction *domain.PocketSmithTransaction) error {
+func (c *HTTPPocketSmithClient) CreateTransaction(accountID int, transaction *domain.PocketSmithTransaction) error {
 	// Marshal request body
 	requestBody, err := json.Marshal(transaction)
 	if err != nil {
@@ -40,7 +166,7 @@ func (c *HTTPPocketSmithClient) CreateTransaction(accountID string, transaction 
 	}
 
 	// Create HTTP request
-	url := fmt.Sprintf("%s/transaction_accounts/%s/transactions", c.baseURL, accountID)
+	url := fmt.Sprintf("%s/transaction_accounts/%d/transactions", c.baseURL, accountID)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBody))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
