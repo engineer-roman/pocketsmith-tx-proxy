@@ -7,6 +7,7 @@ import (
 	"github.com/fermyon/spin/sdk/go/v2/variables"
 	"github.com/pocketsmith-proxy/internal/api"
 	"github.com/pocketsmith-proxy/internal/handler"
+	"github.com/pocketsmith-proxy/internal/repository"
 	"github.com/pocketsmith-proxy/internal/service"
 	spinhttp "github.com/spinframework/spin-go-sdk/v2/http"
 )
@@ -31,9 +32,19 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Initialize layers (API -> Service -> Handler)
+	redisAddress, err := variables.Get("redis_address")
+	if err != nil {
+		log.Printf("Failed to get redis_address: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Initialize layers (Cache -> API -> Service -> Handler)
+	// Layer 0: Cache Repository
+	cacheRepo := repository.NewRedisCacheRepository(redisAddress)
+
 	// Layer 1: API Client
-	apiClient := api.NewHTTPPocketSmithClient(pocketsmithAPIKey)
+	apiClient := api.NewHTTPPocketSmithClient(pocketsmithAPIKey, cacheRepo)
 
 	// Layer 2: Service
 	transactionService := service.NewTransactionService(apiClient)

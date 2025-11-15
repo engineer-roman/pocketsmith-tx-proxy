@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/pocketsmith-proxy/internal/domain"
+	"github.com/pocketsmith-proxy/internal/repository"
 	spinhttp "github.com/spinframework/spin-go-sdk/v2/http"
 )
 
@@ -27,18 +29,30 @@ type PocketSmithClient interface {
 type HTTPPocketSmithClient struct {
 	apiKey  string
 	baseURL string
+	cache   repository.CacheRepository
 }
 
 // NewHTTPPocketSmithClient creates a new HTTP-based PocketSmith client
-func NewHTTPPocketSmithClient(apiKey string) PocketSmithClient {
+func NewHTTPPocketSmithClient(apiKey string, cache repository.CacheRepository) PocketSmithClient {
 	return &HTTPPocketSmithClient{
 		apiKey:  apiKey,
 		baseURL: "https://api.pocketsmith.com/v2",
+		cache:   cache,
 	}
 }
 
 // GetMe implements PocketSmithClient.GetMe
 func (c *HTTPPocketSmithClient) GetMe() (*domain.User, error) {
+	// Try to get from cache first
+	userID, err := c.cache.GetUserID()
+	if err == nil {
+		// Cache hit
+		return &domain.User{ID: userID}, nil
+	}
+
+	// Cache miss - fetch from API
+	log.Printf("Cache miss for user ID, fetching from PocketSmith API")
+
 	// Create HTTP request
 	url := fmt.Sprintf("%s/me", c.baseURL)
 	httpReq, err := http.NewRequest("GET", url, nil)
@@ -65,6 +79,7 @@ func (c *HTTPPocketSmithClient) GetMe() (*domain.User, error) {
 
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
+		log.Printf("ERROR: Failed to fetch user from PocketSmith API (status %d): %s", resp.StatusCode, string(responseBody))
 		return nil, fmt.Errorf("PocketSmith request failed with status %d: %s", resp.StatusCode, string(responseBody))
 	}
 
@@ -74,11 +89,26 @@ func (c *HTTPPocketSmithClient) GetMe() (*domain.User, error) {
 		return nil, fmt.Errorf("unmarshal response: %w", err)
 	}
 
+	// Store in cache
+	if err := c.cache.SetUserID(user.ID); err != nil {
+		log.Printf("Warning: Failed to cache user ID: %v", err)
+	}
+
 	return &user, nil
 }
 
 // GetTransactionAccounts implements PocketSmithClient.GetTransactionAccounts
 func (c *HTTPPocketSmithClient) GetTransactionAccounts(userID int) ([]domain.TransactionAccount, error) {
+	// Try to get from cache first
+	accounts, err := c.cache.GetTransactionAccounts(userID)
+	if err == nil {
+		// Cache hit
+		return accounts, nil
+	}
+
+	// Cache miss - fetch from API
+	log.Printf("Cache miss for transaction accounts (user %d), fetching from PocketSmith API", userID)
+
 	// Create HTTP request
 	url := fmt.Sprintf("%s/users/%d/transaction_accounts", c.baseURL, userID)
 	httpReq, err := http.NewRequest("GET", url, nil)
@@ -105,13 +135,18 @@ func (c *HTTPPocketSmithClient) GetTransactionAccounts(userID int) ([]domain.Tra
 
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
+		log.Printf("ERROR: Failed to fetch transaction accounts for user %d from PocketSmith API (status %d): %s", userID, resp.StatusCode, string(responseBody))
 		return nil, fmt.Errorf("PocketSmith request failed with status %d: %s", resp.StatusCode, string(responseBody))
 	}
 
 	// Unmarshal response
-	var accounts []domain.TransactionAccount
 	if err := json.Unmarshal(responseBody, &accounts); err != nil {
 		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	// Store in cache
+	if err := c.cache.SetTransactionAccounts(userID, accounts); err != nil {
+		log.Printf("Warning: Failed to cache transaction accounts: %v", err)
 	}
 
 	return accounts, nil
@@ -119,6 +154,16 @@ func (c *HTTPPocketSmithClient) GetTransactionAccounts(userID int) ([]domain.Tra
 
 // GetCategories implements PocketSmithClient.GetCategories
 func (c *HTTPPocketSmithClient) GetCategories(userID int) ([]domain.Category, error) {
+	// Try to get from cache first
+	categories, err := c.cache.GetCategories(userID)
+	if err == nil {
+		// Cache hit
+		return categories, nil
+	}
+
+	// Cache miss - fetch from API
+	log.Printf("Cache miss for categories (user %d), fetching from PocketSmith API", userID)
+
 	// Create HTTP request
 	url := fmt.Sprintf("%s/users/%d/categories", c.baseURL, userID)
 	httpReq, err := http.NewRequest("GET", url, nil)
@@ -145,13 +190,18 @@ func (c *HTTPPocketSmithClient) GetCategories(userID int) ([]domain.Category, er
 
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
+		log.Printf("ERROR: Failed to fetch categories for user %d from PocketSmith API (status %d): %s", userID, resp.StatusCode, string(responseBody))
 		return nil, fmt.Errorf("PocketSmith request failed with status %d: %s", resp.StatusCode, string(responseBody))
 	}
 
 	// Unmarshal response
-	var categories []domain.Category
 	if err := json.Unmarshal(responseBody, &categories); err != nil {
 		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	// Store in cache
+	if err := c.cache.SetCategories(userID, categories); err != nil {
+		log.Printf("Warning: Failed to cache categories: %v", err)
 	}
 
 	return categories, nil
