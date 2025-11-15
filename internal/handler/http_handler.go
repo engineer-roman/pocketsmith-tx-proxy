@@ -43,7 +43,12 @@ func (h *HTTPHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	// Process transaction
 	if err := h.service.AddTransaction(tx); err != nil {
-		statusCode = http.StatusInternalServerError
+		// Check if it's a lookup error (return 400) or internal error (return 500)
+		if service.IsLookupError(err) {
+			statusCode = http.StatusBadRequest
+		} else {
+			statusCode = http.StatusInternalServerError
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(statusCode)
 		errorResponse := map[string]string{
@@ -117,7 +122,7 @@ func (h *HTTPHandler) validateAndParseRequest(r *http.Request) (*domain.Transact
 	}
 
 	// Validate all required fields are present
-	if txParams.Currency == "" || txParams.Merchant == "" || txParams.Value == "" || txParams.Date == "" {
+	if txParams.Currency == "" || txParams.Category == "" || txParams.Merchant == "" || txParams.Value == "" || txParams.Date == "" {
 		return nil, http.StatusBadRequest, "Bad request"
 	}
 
@@ -133,6 +138,7 @@ func (h *HTTPHandler) validateAndParseRequest(r *http.Request) (*domain.Transact
 	// Create domain transaction
 	tx := &domain.Transaction{
 		Currency: txParams.Currency,
+		Category: txParams.Category,
 		Merchant: txParams.Merchant,
 		Amount:   amount,
 		Date:     txParams.Date,

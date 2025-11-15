@@ -31,30 +31,12 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	usdAccountID, err := variables.Get("usd_account_id")
-	if err != nil {
-		log.Printf("Failed to get usd_account_id: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	arsAccountID, err := variables.Get("ars_account_id")
-	if err != nil {
-		log.Printf("Failed to get ars_account_id: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
 	// Initialize layers (API -> Service -> Handler)
 	// Layer 1: API Client
 	apiClient := api.NewHTTPPocketSmithClient(pocketsmithAPIKey)
 
 	// Layer 2: Service
-	serviceConfig := &service.Config{
-		USDAccountID: usdAccountID,
-		ARSAccountID: arsAccountID,
-	}
-	transactionService := service.NewTransactionService(apiClient, serviceConfig)
+	transactionService := service.NewTransactionService(apiClient)
 
 	// Layer 3: Handler (Facade)
 	httpHandler := handler.NewHTTPHandler(transactionService, clientAuthKey)
