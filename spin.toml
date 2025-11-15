@@ -15,6 +15,8 @@ pocketsmith_api_key = { required = true }
 # Account IDs for different currencies
 usd_account_id = { required = true }
 ars_account_id = { required = true }
+# Redis configuration
+redis_address = { default = "redis://localhost:6379" }
 
 [[trigger.http]]
 route = "/api/v1/transactions/append"
@@ -22,13 +24,14 @@ component = "pocketsmith-rpc"
 
 [component.pocketsmith-rpc]
 source = "main.wasm"
-allowed_outbound_hosts = ["https://api.pocketsmith.com"]
+allowed_outbound_hosts = ["https://api.pocketsmith.com", "redis://localhost:6379"]
 
 [component.pocketsmith-rpc.variables]
 client_auth_key = "{{ client_key }}"
 pocketsmith_api_key = "{{ pocketsmith_api_key }}"
 usd_account_id = "{{ usd_account_id }}"
 ars_account_id = "{{ ars_account_id }}"
+redis_address = "{{ redis_address }}"
 
 [component.pocketsmith-rpc.build]
 command = "tinygo build -target=wasip1 -gc=leaking -buildmode=c-shared -no-debug -o main.wasm ."

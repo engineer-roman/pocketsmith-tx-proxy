@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 
@@ -96,6 +97,7 @@ func (s *TransactionServiceImpl) AddTransaction(tx *domain.Transaction) error {
 		}
 	}
 	if accountID == nil {
+		log.Printf("ERROR: No transaction account found in PocketSmith API for currency: '%s' (searched among %d accounts)", tx.Currency, len(accounts))
 		return &lookupError{message: fmt.Sprintf("no transaction account found for currency: %s", tx.Currency)}
 	}
 
@@ -103,6 +105,7 @@ func (s *TransactionServiceImpl) AddTransaction(tx *domain.Transaction) error {
 	var categoryID *int
 	categoryID = s.findCategoryByTitle(categories, categoryLower)
 	if categoryID == nil {
+		log.Printf("ERROR: No category found in PocketSmith API with title: '%s' (searched among %d categories)", tx.Category, len(categories))
 		return &lookupError{message: fmt.Sprintf("no category found with title: %s", tx.Category)}
 	}
 
