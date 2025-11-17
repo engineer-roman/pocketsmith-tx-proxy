@@ -28,6 +28,28 @@ func NewHTTPHandler(svc service.TransactionService, clientAuthKey string) *HTTPH
 
 // Handle processes incoming HTTP requests
 func (h *HTTPHandler) Handle(w http.ResponseWriter, r *http.Request) {
+	method := r.Method
+	path := r.URL.Path
+
+	// Route based on path and method
+	switch {
+	case path == "/api/v1/transactions/append" && method == http.MethodPost:
+		h.handleAddTransaction(w, r)
+	case path == "/api/v1/categories" && method == http.MethodGet:
+		h.handleGetCategories(w, r)
+	case path == "/api/v1/accounts" && method == http.MethodGet:
+		h.handleGetAccounts(w, r)
+	case path == "/api/v1/shortcut_entities" && method == http.MethodGet:
+		h.handleGetShortcutEntities(w, r)
+	default:
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprintln(w, "Not found")
+		h.logRequest(method, path, http.StatusNotFound)
+	}
+}
+
+// handleAddTransaction handles POST /api/v1/transactions/append
+func (h *HTTPHandler) handleAddTransaction(w http.ResponseWriter, r *http.Request) {
 	var statusCode int
 	method := r.Method
 	path := r.URL.Path
@@ -64,6 +86,126 @@ func (h *HTTPHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	fmt.Fprintln(w, `{"result": "ok"}`)
+	h.logRequest(method, path, statusCode)
+}
+
+// handleGetCategories handles GET /api/v1/categories
+func (h *HTTPHandler) handleGetCategories(w http.ResponseWriter, r *http.Request) {
+	method := r.Method
+	path := r.URL.Path
+	var statusCode int
+
+	// Validate auth
+	if !h.validateAuth(r) {
+		statusCode = http.StatusForbidden
+		w.WriteHeader(statusCode)
+		fmt.Fprintln(w, "Forbidden")
+		h.logRequest(method, path, statusCode)
+		return
+	}
+
+	// Get categories from service
+	categories, err := h.service.GetCategories()
+	if err != nil {
+		statusCode = http.StatusInternalServerError
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+		errorResponse := map[string]string{
+			"error": err.Error(),
+		}
+		json.NewEncoder(w).Encode(errorResponse)
+		h.logRequest(method, path, statusCode)
+		return
+	}
+
+	// Success response
+	statusCode = http.StatusOK
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	response := map[string]interface{}{
+		"items": categories,
+	}
+	json.NewEncoder(w).Encode(response)
+	h.logRequest(method, path, statusCode)
+}
+
+// handleGetAccounts handles GET /api/v1/accounts
+func (h *HTTPHandler) handleGetAccounts(w http.ResponseWriter, r *http.Request) {
+	method := r.Method
+	path := r.URL.Path
+	var statusCode int
+
+	// Validate auth
+	if !h.validateAuth(r) {
+		statusCode = http.StatusForbidden
+		w.WriteHeader(statusCode)
+		fmt.Fprintln(w, "Forbidden")
+		h.logRequest(method, path, statusCode)
+		return
+	}
+
+	// Get accounts from service
+	accounts, err := h.service.GetAccounts()
+	if err != nil {
+		statusCode = http.StatusInternalServerError
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+		errorResponse := map[string]string{
+			"error": err.Error(),
+		}
+		json.NewEncoder(w).Encode(errorResponse)
+		h.logRequest(method, path, statusCode)
+		return
+	}
+
+	// Success response
+	statusCode = http.StatusOK
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	response := map[string]interface{}{
+		"items": accounts,
+	}
+	json.NewEncoder(w).Encode(response)
+	h.logRequest(method, path, statusCode)
+}
+
+// handleGetShortcutEntities handles GET /api/v1/shortcut_entities
+func (h *HTTPHandler) handleGetShortcutEntities(w http.ResponseWriter, r *http.Request) {
+	method := r.Method
+	path := r.URL.Path
+	var statusCode int
+
+	// Validate auth
+	if !h.validateAuth(r) {
+		statusCode = http.StatusForbidden
+		w.WriteHeader(statusCode)
+		fmt.Fprintln(w, "Forbidden")
+		h.logRequest(method, path, statusCode)
+		return
+	}
+
+	// Get shortcut entities from service
+	entities, err := h.service.GetShortcutEntities()
+	if err != nil {
+		statusCode = http.StatusInternalServerError
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+		errorResponse := map[string]string{
+			"error": err.Error(),
+		}
+		json.NewEncoder(w).Encode(errorResponse)
+		h.logRequest(method, path, statusCode)
+		return
+	}
+
+	// Success response
+	statusCode = http.StatusOK
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	response := map[string]interface{}{
+		"data": entities,
+	}
+	json.NewEncoder(w).Encode(response)
 	h.logRequest(method, path, statusCode)
 }
 
@@ -145,6 +287,16 @@ func (h *HTTPHandler) validateAndParseRequest(r *http.Request) (*domain.Transact
 	}
 
 	return tx, http.StatusOK, ""
+}
+
+// validateAuth validates the Authorization header
+func (h *HTTPHandler) validateAuth(r *http.Request) bool {
+	clientToken := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if h.clientAuthKey != clientToken {
+		log.Println("Invalid client auth")
+		return false
+	}
+	return true
 }
 
 // logRequest logs the HTTP request details

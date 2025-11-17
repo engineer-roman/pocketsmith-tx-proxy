@@ -22,6 +22,18 @@ redis_address = { default = "redis://localhost:6379" }
 route = "/api/v1/transactions/append"
 component = "pocketsmith-rpc"
 
+[[trigger.http]]
+route = "/api/v1/categories"
+component = "pocketsmith-rpc"
+
+[[trigger.http]]
+route = "/api/v1/accounts"
+component = "pocketsmith-rpc"
+
+[[trigger.http]]
+route = "/api/v1/shortcut_entities"
+component = "pocketsmith-rpc"
+
 [component.pocketsmith-rpc]
 source = "main.wasm"
 allowed_outbound_hosts = ["https://api.pocketsmith.com", "redis://localhost:6379"]
