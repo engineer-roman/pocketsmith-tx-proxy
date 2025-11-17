@@ -51,3 +51,15 @@ type Category struct {
 	Title    string `json:"title"`
 	ParentID *int   `json:"parent_id"`
 }
+
+// AccountInfo represents account information for the client
+type AccountInfo struct {
+	Name     string `json:"name"`
+	Currency string `json:"currency"`
+}
+
+// ShortcutEntities represents combined accounts and categories data
+type ShortcutEntities struct {
+	Accounts   []AccountInfo `json:"accounts"`
+	Categories []string      `json:"categories"`
+}

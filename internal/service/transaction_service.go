@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"sync"
 
@@ -14,6 +15,12 @@ import (
 type TransactionService interface {
 	// AddTransaction adds a transaction to the appropriate account
 	AddTransaction(tx *domain.Transaction) error
+	// GetCategories returns all category names sorted ascending
+	GetCategories() ([]string, error)
+	// GetAccounts returns all accounts with name and currency
+	GetAccounts() ([]domain.AccountInfo, error)
+	// GetShortcutEntities returns both accounts and categories for quick access
+	GetShortcutEntities() (*domain.ShortcutEntities, error)
 }
 
 // TransactionServiceImpl implements TransactionService
@@ -131,4 +138,121 @@ func (s *TransactionServiceImpl) findCategoryByTitle(categories []domain.Categor
 		}
 	}
 	return nil
+}
+
+// GetCategories implements TransactionService.GetCategories
+func (s *TransactionServiceImpl) GetCategories() ([]string, error) {
+	// Get user ID
+	user, err := s.client.GetMe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user info: %w", err)
+	}
+
+	// Fetch categories from cache or API
+	categories, err := s.client.GetCategories(user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get categories: %w", err)
+	}
+
+	// Extract category names
+	categoryNames := make([]string, 0, len(categories))
+	for _, category := range categories {
+		categoryNames = append(categoryNames, category.Title)
+	}
+
+	// Sort ascending
+	sort.Strings(categoryNames)
+
+	return categoryNames, nil
+}
+
+// GetAccounts implements TransactionService.GetAccounts
+func (s *TransactionServiceImpl) GetAccounts() ([]domain.AccountInfo, error) {
+	// Get user ID
+	user, err := s.client.GetMe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user info: %w", err)
+	}
+
+	// Fetch accounts from cache or API
+	accounts, err := s.client.GetTransactionAccounts(user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get transaction accounts: %w", err)
+	}
+
+	// Transform to AccountInfo
+	accountInfos := make([]domain.AccountInfo, 0, len(accounts))
+	for _, account := range accounts {
+		accountInfos = append(accountInfos, domain.AccountInfo{
+			Name:     account.Name,
+			Currency: account.CurrencyCode,
+		})
+	}
+
+	return accountInfos, nil
+}
+
+// GetShortcutEntities implements TransactionService.GetShortcutEntities
+func (s *TransactionServiceImpl) GetShortcutEntities() (*domain.ShortcutEntities, error) {
+	// Get user ID
+	user, err := s.client.GetMe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user info: %w", err)
+	}
+
+	// Fetch accounts and categories concurrently
+	var (
+		accounts      []domain.TransactionAccount
+		categories    []domain.Category
+		wg            sync.WaitGroup
+		errAccounts   error
+		errCategories error
+	)
+
+	wg.Add(2)
+
+	// Fetch transaction accounts
+	go func() {
+		defer wg.Done()
+		accounts, errAccounts = s.client.GetTransactionAccounts(user.ID)
+	}()
+
+	// Fetch categories
+	go func() {
+		defer wg.Done()
+		categories, errCategories = s.client.GetCategories(user.ID)
+	}()
+
+	wg.Wait()
+
+	// Check for errors
+	if errAccounts != nil {
+		return nil, fmt.Errorf("failed to get transaction accounts: %w", errAccounts)
+	}
+	if errCategories != nil {
+		return nil, fmt.Errorf("failed to get categories: %w", errCategories)
+	}
+
+	// Transform accounts
+	accountInfos := make([]domain.AccountInfo, 0, len(accounts))
+	for _, account := range accounts {
+		accountInfos = append(accountInfos, domain.AccountInfo{
+			Name:     account.Name,
+			Currency: account.CurrencyCode,
+		})
+	}
+
+	// Extract category names
+	categoryNames := make([]string, 0, len(categories))
+	for _, category := range categories {
+		categoryNames = append(categoryNames, category.Title)
+	}
+
+	// Sort categories
+	sort.Strings(categoryNames)
+
+	return &domain.ShortcutEntities{
+		Accounts:   accountInfos,
+		Categories: categoryNames,
+	}, nil
 }
