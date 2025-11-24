@@ -12,7 +12,7 @@ This service provides a JSON-RPC interface for adding transactions to PocketSmit
 - **Redis Caching**: 24-hour TTL cache for user data, accounts, and categories
 - **JSON-RPC endpoint** for adding transactions
 - **Bearer token authentication** for API security
-- **Dynamic account and category lookup** - automatically finds accounts by currency code
+- **Dynamic account and category lookup** - automatically finds accounts by name and categories by title
 - **Amount normalization** (handles comma/dot decimal separators)
 - **Environment-based configuration** (no hardcoded credentials)
 - **Built as a WASM module** using Spin Framework
@@ -31,7 +31,7 @@ The application follows clean architecture principles with three distinct layers
                │ uses interface
 ┌──────────────▼──────────────────────────┐
 │         Service Layer (Business)        │
-│  - Dynamic account lookup by currency   │
+│  - Dynamic account lookup by name       │
 │  - Dynamic category lookup by title     │
 │  - Data transformation                  │
 │  - Business rules                       │
@@ -70,7 +70,7 @@ The application follows clean architecture principles with three distinct layers
 │       └── http_handler.go          # HTTP request handling
 ├── spin.toml                         # Spin configuration
 ├── go.mod                            # Go module definition
-├── local.toml.example                # Example local configuration
+├── .env.local.example                # Example environment variables
 ├── Taskfile.yml                      # Task automation (build, dev, deploy, etc.)
 └── README.md                         # This file
 ```
@@ -89,7 +89,7 @@ The application requires **two** environment variables and has one optional conf
 
 ### Required Variables
 
-1. **`client_key`** - Bearer token for authenticating incoming requests from your client (e.g., iOS Shortcuts)
+1. **`client_auth_key`** - Bearer token for authenticating incoming requests from your client (e.g., iOS Shortcuts)
 2. **`pocketsmith_api_key`** - Your PocketSmith API developer key
 
 ### Optional Variables
@@ -109,16 +109,16 @@ This significantly reduces API calls and improves response times. Make sure you 
 
 This proxy uses a two-tier authentication approach to minimize API calls:
 
-1. **Client → Proxy**: Shared secret (Bearer token) configured via `client_key`
+1. **Client → Proxy**: Shared secret (Bearer token) configured via `client_auth_key`
    - Set the same key on both the client (iOS Shortcuts) and server (via env var)
-   - Client sends this as `Authorization: Bearer <client_key>` header
+   - Client sends this as `Authorization: Bearer <client_auth_key>` header
 
 2. **Proxy → PocketSmith**: API key authentication via `pocketsmith_api_key`
    - The proxy authenticates to PocketSmith on behalf of the client
    - Client never needs to know the PocketSmith API key
 
 **Security Notes:**
-- Keep `client_key` and `pocketsmith_api_key` different
+- Keep `client_auth_key` and `pocketsmith_api_key` different
 - Always use HTTPS in production
 - Rotate keys periodically
 - Never commit credentials to version control
@@ -163,34 +163,32 @@ redis-server
 docker run -d -p 6379:6379 redis:latest
 ```
 
-### Option 1: Using local.toml (Recommended)
+### Option 1: Using .env.local (Recommended)
 
 1. Copy the example configuration:
 ```bash
-cp local.toml.example local.toml
+cp .env.local.example .env.local
 ```
 
-2. Edit `local.toml` with your actual values:
-```toml
-[variables]
-client_key = "your-client-bearer-token"
-pocketsmith_api_key = "your-pocketsmith-api-key"
-# redis_address = "redis://localhost:6379"  # Optional, this is the default
+2. Edit `.env.local` with your actual values:
+```bash
+SPIN_VARIABLE_CLIENT_AUTH_KEY=your-client-bearer-token
+SPIN_VARIABLE_POCKETSMITH_API_KEY=your-pocketsmith-api-key
+SPIN_VARIABLE_REDIS_ADDRESS=redis://localhost:6379
 ```
 
-3. Run the service:
+3. Run the service using Task (which automatically loads `.env.local`):
 ```bash
 task dev
-# or
-spin up
 ```
 
-### Option 2: Using Environment Variables
+### Option 2: Using Environment Variables Directly
 
 You can also set variables directly when running:
 ```bash
-SPIN_VARIABLE_CLIENT_KEY="your-token" \
+SPIN_VARIABLE_CLIENT_AUTH_KEY="your-token" \
 SPIN_VARIABLE_POCKETSMITH_API_KEY="your-api-key" \
+SPIN_VARIABLE_REDIS_ADDRESS="redis://localhost:6379" \
 spin up
 ```
 
@@ -217,7 +215,8 @@ Authorization: Bearer <your-client-key>
 {
   "method": "transactions.add",
   "params": {
-    "currency": "USD",
+    "account": "USD General",
+    "category": "Eating out",
     "merchant": "Coffee Shop",
     "value": "-5.50",
     "date": "2025-01-13"
@@ -227,8 +226,8 @@ Authorization: Bearer <your-client-key>
 
 #### Parameters
 
-- **`currency`** (string, required): Currency code (e.g., `USD`, `ARS`, `EUR`) - must match an account in your PocketSmith
-- **`category`** (string, required): Category title - must match a category in your PocketSmith
+- **`account`** (string, required): Account name (e.g., `USD General`, `ARS General`) - must match an account name in your PocketSmith (case-insensitive)
+- **`category`** (string, required): Category title - must match a category in your PocketSmith (case-insensitive)
 - **`merchant`** (string, required): Merchant/payee name
 - **`value`** (string, required): Transaction amount (negative for expenses, positive for income)
   - Supports both comma (`,`) and dot (`.`) as decimal separator
@@ -256,7 +255,7 @@ curl -X POST http://localhost:3000/api/v1/transactions/append \
   -d '{
     "method": "transactions.add",
     "params": {
-      "currency": "USD",
+      "account": "USD General",
       "category": "Groceries",
       "merchant": "Grocery Store",
       "value": "-42.50",
@@ -278,7 +277,7 @@ spin cloud deploy
 ### Set the required variables:
 
 ```bash
-spin cloud variables set client_key="your-client-bearer-token"
+spin cloud variables set client_auth_key="your-client-bearer-token"
 spin cloud variables set pocketsmith_api_key="your-pocketsmith-api-key"
 ```
 
@@ -295,9 +294,9 @@ Note: For production deployments, consider using Fermyon Cloud's built-in key-va
 
 Example Shortcuts workflow:
 
-1. **Get transaction details** from user input (merchant, amount, currency, date)
+1. **Get transaction details** from user input (merchant, amount, account name, category, date)
 2. **Make HTTP POST request** to the proxy endpoint
-3. **Include Authorization header** with your Bearer token (same as `client_key`)
+3. **Include Authorization header** with your Bearer token (same as `client_auth_key`)
 4. **Send JSON body** with transaction details in JSON-RPC format
 5. **Display result** to user
 
@@ -305,10 +304,11 @@ Example Shortcuts workflow:
 
 1. Ask for input: Merchant name
 2. Ask for input: Amount (number)
-3. Ask for input: Currency (choose from: USD, ARS)
-4. Get current date
-5. Create dictionary with transaction data
-6. Get contents of URL:
+3. Ask for input: Account (choose from: USD General, ARS General, etc.)
+4. Ask for input: Category (choose from: Groceries, Eating out, etc.)
+5. Get current date
+6. Create dictionary with transaction data
+7. Get contents of URL:
    - URL: `https://your-app.fermyon.app/api/v1/transactions/append`
    - Method: POST
    - Headers:
@@ -321,29 +321,33 @@ Example Shortcuts workflow:
 The service returns appropriate HTTP status codes:
 
 - **200 OK**: Transaction created successfully
-- **400 Bad Request**: Invalid request format, missing required fields, or entity not found (currency account or category)
+- **400 Bad Request**: Invalid request format, missing required fields, or entity not found (account or category)
 - **403 Forbidden**: Invalid or missing authentication token
 - **405 Method Not Allowed**: HTTP method is not POST
 - **422 Unprocessable Entity**: Invalid amount format (e.g., multiple decimal separators)
 - **500 Internal Server Error**: Server-side error (check logs)
 
-When a currency account or category is not found, detailed error messages are logged indicating:
+When an account or category is not found, detailed error messages are logged indicating:
 - The exact search string used
 - How many entities were searched
 - Whether the lookup was from cache or API
 
 ## Development
 
-### Adding Support for New Currencies or Categories
+### Adding Support for New Accounts or Categories
 
 No configuration changes needed! The application **automatically** discovers:
-- All transaction accounts from your PocketSmith
-- All categories from your PocketSmith
+- All transaction accounts from your PocketSmith (sorted alphabetically)
+- All categories from your PocketSmith (sorted alphabetically)
+- Net worth accounts are automatically filtered out
 
-Simply use the correct currency code or category title in your API requests. The service will:
+Simply use the correct account name or category title in your API requests. The service will:
 1. Check the cache first (24-hour TTL)
 2. Fall back to PocketSmith API if not cached
-3. Return a 400 error with detailed logging if the entity is not found
+3. Sort the data alphabetically before caching
+4. Return a 400 error with detailed logging if the entity is not found
+
+**Note:** Account and category lookups are case-insensitive, so "USD General", "usd general", and "USD GENERAL" will all match the same account.
 
 ### Running Tests
 

@@ -2,7 +2,7 @@ package domain
 
 // Transaction represents a financial transaction
 type Transaction struct {
-	Currency string
+	Account  string
 	Category string
 	Merchant string
 	Amount   string
@@ -26,7 +26,7 @@ type RPCRequest struct {
 
 // TransactionParams represents the parameters for adding a transaction
 type TransactionParams struct {
-	Currency string `json:"currency"`
+	Account  string `json:"account"`
 	Category string `json:"category"`
 	Merchant string `json:"merchant"`
 	Value    string `json:"value"`
@@ -43,6 +43,7 @@ type TransactionAccount struct {
 	ID           int    `json:"id"`
 	Name         string `json:"name"`
 	CurrencyCode string `json:"currency_code"`
+	IsNetWorth   bool   `json:"is_net_worth"`
 }
 
 // Category represents a PocketSmith category

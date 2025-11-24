@@ -264,7 +264,7 @@ func (h *HTTPHandler) validateAndParseRequest(r *http.Request) (*domain.Transact
 	}
 
 	// Validate all required fields are present
-	if txParams.Currency == "" || txParams.Category == "" || txParams.Merchant == "" || txParams.Value == "" || txParams.Date == "" {
+	if txParams.Account == "" || txParams.Category == "" || txParams.Merchant == "" || txParams.Value == "" || txParams.Date == "" {
 		return nil, http.StatusBadRequest, "Bad request"
 	}
 
@@ -279,7 +279,7 @@ func (h *HTTPHandler) validateAndParseRequest(r *http.Request) (*domain.Transact
 
 	// Create domain transaction
 	tx := &domain.Transaction{
-		Currency: txParams.Currency,
+		Account:  txParams.Account,
 		Category: txParams.Category,
 		Merchant: txParams.Merchant,
 		Amount:   amount,

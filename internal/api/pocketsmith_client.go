@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
 
 	"github.com/pocketsmith-proxy/internal/domain"
 	"github.com/pocketsmith-proxy/internal/repository"
@@ -140,11 +141,25 @@ func (c *HTTPPocketSmithClient) GetTransactionAccounts(userID int) ([]domain.Tra
 	}
 
 	// Unmarshal response
-	if err := json.Unmarshal(responseBody, &accounts); err != nil {
+	var allAccounts []domain.TransactionAccount
+	if err := json.Unmarshal(responseBody, &allAccounts); err != nil {
 		return nil, fmt.Errorf("unmarshal response: %w", err)
 	}
 
-	// Store in cache
+	// Filter out net worth accounts
+	accounts = make([]domain.TransactionAccount, 0, len(allAccounts))
+	for _, account := range allAccounts {
+		if !account.IsNetWorth {
+			accounts = append(accounts, account)
+		}
+	}
+
+	// Sort accounts alphabetically by name (ascending)
+	sort.Slice(accounts, func(i, j int) bool {
+		return accounts[i].Name < accounts[j].Name
+	})
+
+	// Store in cache (only non-net-worth accounts, sorted)
 	if err := c.cache.SetTransactionAccounts(userID, accounts); err != nil {
 		log.Printf("Warning: Failed to cache transaction accounts: %v", err)
 	}
@@ -199,7 +214,12 @@ func (c *HTTPPocketSmithClient) GetCategories(userID int) ([]domain.Category, er
 		return nil, fmt.Errorf("unmarshal response: %w", err)
 	}
 
-	// Store in cache
+	// Sort categories alphabetically by title (ascending)
+	sort.Slice(categories, func(i, j int) bool {
+		return categories[i].Title < categories[j].Title
+	})
+
+	// Store in cache (sorted)
 	if err := c.cache.SetCategories(userID, categories); err != nil {
 		log.Printf("Warning: Failed to cache categories: %v", err)
 	}

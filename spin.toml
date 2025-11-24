@@ -9,7 +9,7 @@ description = "PocketSmith API proxy with JSON-RPC interface"
 
 [variables]
 # For inbound requests to RPC endpoint
-client_key = { required = true }
+client_auth_key = { required = true }
 # For PocketSmith API access
 pocketsmith_api_key = { required = true }
 # Redis configuration
@@ -36,7 +36,7 @@ source = "main.wasm"
 allowed_outbound_hosts = ["https://api.pocketsmith.com", "redis://localhost:6379"]
 
 [component.pocketsmith-rpc.variables]
-client_auth_key = "{{ client_key }}"
+client_auth_key = "{{ client_auth_key }}"
 pocketsmith_api_key = "{{ pocketsmith_api_key }}"
 redis_address = "{{ redis_address }}"
 

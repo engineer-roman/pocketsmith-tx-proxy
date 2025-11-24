@@ -5,7 +5,6 @@ import (
 	"log"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/pocketsmith-proxy/internal/api"
 	"github.com/pocketsmith-proxy/internal/domain"
@@ -53,7 +52,7 @@ func IsLookupError(err error) bool {
 // AddTransaction implements TransactionService.AddTransaction
 func (s *TransactionServiceImpl) AddTransaction(tx *domain.Transaction) error {
 	// Normalize inputs
-	currencyLower := strings.ToLower(tx.Currency)
+	accountLower := strings.ToLower(tx.Account)
 	categoryLower := strings.ToLower(tx.Category)
 
 	// Get user ID
@@ -62,50 +61,29 @@ func (s *TransactionServiceImpl) AddTransaction(tx *domain.Transaction) error {
 		return fmt.Errorf("failed to get user info: %w", err)
 	}
 
-	// Fetch transaction accounts and categories concurrently
-	var (
-		accounts      []domain.TransactionAccount
-		categories    []domain.Category
-		wg            sync.WaitGroup
-		errAccounts   error
-		errCategories error
-	)
-
-	wg.Add(2)
-
 	// Fetch transaction accounts
-	go func() {
-		defer wg.Done()
-		accounts, errAccounts = s.client.GetTransactionAccounts(user.ID)
-	}()
+	accounts, err := s.client.GetTransactionAccounts(user.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get transaction accounts: %w", err)
+	}
 
 	// Fetch categories
-	go func() {
-		defer wg.Done()
-		categories, errCategories = s.client.GetCategories(user.ID)
-	}()
-
-	wg.Wait()
-
-	// Check for errors in concurrent fetches
-	if errAccounts != nil {
-		return fmt.Errorf("failed to get transaction accounts: %w", errAccounts)
-	}
-	if errCategories != nil {
-		return fmt.Errorf("failed to get categories: %w", errCategories)
+	categories, err := s.client.GetCategories(user.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get categories: %w", err)
 	}
 
-	// Find transaction account by currency code
+	// Find transaction account by name
 	var accountID *int
 	for _, account := range accounts {
-		if strings.ToLower(account.CurrencyCode) == currencyLower {
+		if strings.ToLower(account.Name) == accountLower {
 			accountID = &account.ID
 			break
 		}
 	}
 	if accountID == nil {
-		log.Printf("ERROR: No transaction account found in PocketSmith API for currency: '%s' (searched among %d accounts)", tx.Currency, len(accounts))
-		return &lookupError{message: fmt.Sprintf("no transaction account found for currency: %s", tx.Currency)}
+		log.Printf("ERROR: No transaction account found in PocketSmith API with name: '%s' (searched among %d accounts)", tx.Account, len(accounts))
+		return &lookupError{message: fmt.Sprintf("no transaction account found with name: %s", tx.Account)}
 	}
 
 	// Find category by title
@@ -200,37 +178,16 @@ func (s *TransactionServiceImpl) GetShortcutEntities() (*domain.ShortcutEntities
 		return nil, fmt.Errorf("failed to get user info: %w", err)
 	}
 
-	// Fetch accounts and categories concurrently
-	var (
-		accounts      []domain.TransactionAccount
-		categories    []domain.Category
-		wg            sync.WaitGroup
-		errAccounts   error
-		errCategories error
-	)
-
-	wg.Add(2)
-
-	// Fetch transaction accounts
-	go func() {
-		defer wg.Done()
-		accounts, errAccounts = s.client.GetTransactionAccounts(user.ID)
-	}()
+	// Fetch accounts
+	accounts, err := s.client.GetTransactionAccounts(user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get transaction accounts: %w", err)
+	}
 
 	// Fetch categories
-	go func() {
-		defer wg.Done()
-		categories, errCategories = s.client.GetCategories(user.ID)
-	}()
-
-	wg.Wait()
-
-	// Check for errors
-	if errAccounts != nil {
-		return nil, fmt.Errorf("failed to get transaction accounts: %w", errAccounts)
-	}
-	if errCategories != nil {
-		return nil, fmt.Errorf("failed to get categories: %w", errCategories)
+	categories, err := s.client.GetCategories(user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get categories: %w", err)
 	}
 
 	// Transform accounts

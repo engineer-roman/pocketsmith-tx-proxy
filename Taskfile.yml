@@ -11,11 +11,13 @@ tasks:
 
   dev:
     desc: Run the app locally with live reload
+    dotenv: ['.env.local']
     cmds:
       - spin build --up
 
   run:
     desc: Run the app locally (requires building first)
+    dotenv: ['.env.local']
     cmds:
       - spin up
 
